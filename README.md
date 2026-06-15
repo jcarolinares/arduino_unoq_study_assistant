@@ -1,12 +1,6 @@
-# Detect Objects on Camera
+# Arduino UNO Q Study Assistant
 
-The **Detect Objects on Camera** example lets you detect objects on a live feed from a USB camera and visualize bounding boxes around the detections in real-time.
-
-**Note:** This example must be run in **Network Mode** in the Arduino App Lab, since it requires a USB-C hub and a USB camera.
-
-![Detect Objects on Camera](assets/docs_assets/video-object-detection.png)
-
-This example uses a pre-trained model to detect objects on a live video feed from a camera. The workflow involves continuously getting the frames from a USB camera, processing it through an AI model using the `video_objectdetection` Brick, and displaying the bounding boxes around detections. The App is managed from an interactive web interface.
+A Study Assistant that uses the Arduino UNO Q and a Local Machine Learning Computer Vision Yolo to help you to focus and work!
 
 ## Brick Used
 
@@ -24,29 +18,24 @@ The example uses the following Bricks:
 - USB-C® hub adapter with external power (x1)
 - A power supply (5 V, 3 A) for the USB hub (e.g. a phone charger)
 - Personal computer with internet access
+- Modulino Buzzer
+- Modulino Knob
+- Modulino Pixels
 
 ### Software
 
 - Arduino App Lab
 
-## How to Use the Example
+## How to Use this project
 
 1. Connect the USB-C hub to the UNO Q and the USB camera.
-  ![Hardware setup](assets/docs_assets/hardware-setup.png)
+  ![Hardware setup](assets/docs_assets/hardware-setup.png) and attach your camera to your monitor or your lamp pointing towards your desktop.
 2. Attach the external power supply to the USB-C hub to power everything.
 3. Run the App.
    ![Arduino App Lab - Run App](assets/docs_assets/launch-app.png)
 4. The App should open automatically in the web browser. You can open it manually via `<board-name>.local:7000`.
-5. Position any object in front of the camera and watch as the App detects and recognizes them.
+5. Start to work!
 
-Try with one of the following objects for a special reaction:
-
-- Cat
-- Cell phone
-- Clock
-- Cup
-- Dog
-- Potted plant
 
 ![Example of special reaction](assets/docs_assets/special-detection.png)
 
