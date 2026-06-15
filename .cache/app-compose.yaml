@@ -1,0 +1,74 @@
+name: study-assistant
+include:
+- /var/lib/arduino-app-cli/assets/0.10.1/compose/arduino/video_object_detection/brick_compose.yaml
+services:
+  main:
+    image: ghcr.io/arduino/app-bricks/python-apps-base:0.10.1
+    depends_on:
+      ei-video-obj-detection-runner:
+        condition: service_healthy
+    volumes:
+    - type: bind
+      source: /home/arduino/ArduinoApps/study-assistant
+      target: /app
+    - type: bind
+      source: /dev
+      target: /dev
+    - type: bind
+      source: /run/udev
+      target: /run/udev
+      read_only: true
+    - type: bind
+      source: /var/run/arduino-router.sock
+      target: /var/run/arduino-router.sock
+    - type: bind
+      source: /dev/leds/builtin/led1_b
+      target: /dev/leds/builtin/led1_b
+    - type: bind
+      source: /dev/leds/builtin/led1_g
+      target: /dev/leds/builtin/led1_g
+    - type: bind
+      source: /dev/leds/builtin/led1_r
+      target: /dev/leds/builtin/led1_r
+    - type: bind
+      source: /dev/leds/builtin/led2_b
+      target: /dev/leds/builtin/led2_b
+    - type: bind
+      source: /dev/leds/builtin/led2_g
+      target: /dev/leds/builtin/led2_g
+    - type: bind
+      source: /dev/leds/builtin/led2_r
+      target: /dev/leds/builtin/led2_r
+    device_cgroup_rules:
+    - c 226:* rmw
+    - c 250:* rmw
+    - c 504:* rmw
+    - c 81:* rmw
+    - c 116:* rmw
+    ports:
+    - 7000:7000
+    user: 1000:1000
+    group_add:
+    - 44
+    - 29
+    - 991
+    - 20
+    - 1001
+    entrypoint: /run.sh
+    extra_hosts:
+    - msgpack-rpc-router:host-gateway
+    labels:
+      cc.arduino.app: "true"
+      cc.arduino.app.main: "true"
+      cc.arduino.app.path: /home/arduino/ArduinoApps/study-assistant
+    environment:
+      APP_HOME: /home/arduino/ArduinoApps/study-assistant
+      BIND_ADDRESS: 0.0.0.0
+      CUSTOM_MODEL_PATH: /home/arduino/.arduino-bricks/ei-models
+      HOST_IP: 192.168.1.27
+      VIDEO_DEVICE: /dev/video2
+    logging:
+      driver: json-file
+      options:
+        max-file: "2"
+        max-size: 5m

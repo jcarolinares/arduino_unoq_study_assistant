@@ -1,0 +1,83 @@
+#include <Arduino.h>
+#line 1 "/home/arduino/ArduinoApps/study-assistant/sketch/sketch.ino"
+// SPDX-FileCopyrightText: Copyright (C) ARDUINO SRL (http://www.arduino.cc)
+//
+// SPDX-License-Identifier: MPL-2.0
+// Created by Julián Caro Linares for Arduino s.r.l using as a base the original example by Arduino "Video Object Detection"
+
+
+#include <Arduino_LED_Matrix.h>
+#include <Arduino_RouterBridge.h>
+#include <Arduino_Modulino.h>
+
+
+Arduino_LED_Matrix matrix;
+
+ModulinoPixels leds;
+int brightness = 25;
+
+ModulinoBuzzer buzzer;
+int frequency = 440;  // Frequency of the tone in Hz
+int duration = 1000;  // Duration of the tone in milliseconds
+
+
+ModulinoKnob knob;
+
+#line 24 "/home/arduino/ArduinoApps/study-assistant/sketch/sketch.ino"
+void setup();
+#line 44 "/home/arduino/ArduinoApps/study-assistant/sketch/sketch.ino"
+void loop();
+#line 51 "/home/arduino/ArduinoApps/study-assistant/sketch/sketch.ino"
+void set_cell_phone(bool state);
+#line 24 "/home/arduino/ArduinoApps/study-assistant/sketch/sketch.ino"
+void setup() {
+  pinMode(LED_BUILTIN, OUTPUT); // We initiate the integrated LED to be used as visual Feedback
+  
+  // UNO Q Matrix Initialization
+  matrix.begin();
+  matrix.clear();
+
+  // Bridge Initialization
+  Serial.begin(9600);
+  Bridge.begin();
+  Bridge.provide("set_cell_phone", set_cell_phone);
+
+  // Modulinos Inizialitation
+  Modulino.begin(Wire1);
+  leds.begin();
+  buzzer.begin();
+  knob.begin();
+  
+}
+
+void loop() {
+  // Modulino Knob Reading
+  int position = knob.get();
+  bool click = knob.isPressed();
+  delay(250); // To control the speed of the reading of the sensors
+}
+
+void set_cell_phone(bool state) {
+    // LOW state means LED is ON
+    digitalWrite(LED_BUILTIN, LOW);
+
+    Serial.println("Cell phone arduino detected");
+  
+    // Set all LEDs to green
+    for (int i = 0; i < 8; i++) {
+        leds.set(i, RED, brightness);
+        leds.show();
+    }
+    buzzer.tone(frequency, duration);  // Generate the tone
+    delay(3000);
+    buzzer.tone(0, duration);  // Stop the tone
+    for (int i = 0; i < 8; i++) {
+        leds.set(i, GREEN, 0);
+        leds.show();
+    }
+  digitalWrite(LED_BUILTIN, HIGH);
+  delay(10000); // Time to avoid multiple activations in different frames
+}
+
+
+
