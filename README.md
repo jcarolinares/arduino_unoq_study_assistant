@@ -175,3 +175,15 @@ phone-detector-buzzer/
 - **Too many or too few detections**: move the **Sensitivity** slider. Higher values need a more confident detection.
 - **Wrong day or hour in the charts**: the statistics follow the time zone of the computer showing the dashboard. Check that its clock is set correctly.
 - **Reset the statistics**: stop the App and delete `data/phone_events.json` and `data/sessions.json`.
+
+## License
+
+This project is released under the **GNU General Public License v3.0 or later** (`GPL-3.0-or-later`). See [LICENSE](LICENSE).
+
+It started from the **Detect Objects on Camera** example by Arduino and bundles a few third-party files that keep their own licenses:
+
+| Files | Author | License |
+| --- | --- | --- |
+| `assets/libs/arduino.js`, `assets/fonts/fonts.css`, `assets/img/*.svg`, `assets/docs_assets/hardware-setup.png` | Arduino s.r.l. | MPL-2.0 |
+| `assets/libs/socket.io.min.js` | Guillermo Rauch | MIT |
+| `assets/fonts/Open Sans/`, `assets/fonts/Roboto/` | Google Fonts | SIL Open Font License 1.1 (see the `OFL.txt` files) |

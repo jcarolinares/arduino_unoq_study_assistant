@@ -1,6 +1,6 @@
-// SPDX-FileCopyrightText: Copyright (C) Arduino s.r.l. and/or its affiliated companies
+// SPDX-FileCopyrightText: Copyright (C) 2026 jcarolinares
 //
-// SPDX-License-Identifier: MPL-2.0
+// SPDX-License-Identifier: GPL-3.0-or-later
 
 #include <Arduino_RouterBridge.h>
 #include <Arduino_Modulino.h>
