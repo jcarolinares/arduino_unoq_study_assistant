@@ -1,7 +1,7 @@
-name: Study Assistant
-description: This example showcases object detection within a live feed from a USB camera.
+name: Study Assistant - Phone Detector
+description: A study assistant dashboard with live clock, focus timer and daily phone-detection stats. A Modulino Buzzer beeps every time a cell phone is seen on camera.
 ports: []
 bricks:
 - arduino:video_object_detection: {}
 - arduino:web_ui: {}
-icon: 🏫
+icon: 📚
