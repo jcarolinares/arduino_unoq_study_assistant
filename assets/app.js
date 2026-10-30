@@ -6,7 +6,6 @@ const $ = id => document.getElementById(id);
 const LOCALE = 'en-GB';
 const DAY_MS = 86400000;
 const PHONE_IN_VIEW_TIMEOUT_MS = 3000;
-const PHONE_PAUSE_MIN_MS = 10000; // The focus timer stays paused at least this long after a phone is seen
 
 let phoneEvents = []; // Epoch milliseconds of each phone detection, sent by the board
 let lastPhoneSeen = 0;
@@ -77,7 +76,6 @@ ui.on_message('detection', msg => {
   if (msg.content === 'cell phone') {
     lastPhoneSeen = Date.now();
     updatePhoneBadge();
-    pauseTimerForPhone();
   }
 });
 
@@ -158,7 +156,7 @@ function renderPhoneStats() {
     : 'None today';
 
   // Focus score: fewer detections per focused hour is better
-  const focusedMin = load('focusMinutes:' + todayKey(), 0);
+  const focusedMin = sessionsToday().reduce((a, x) => a + (x.minutes || 0), 0);
   let score;
   if (today.length === 0) score = 100;
   else {
@@ -215,109 +213,71 @@ function renderWeekChart() {
   $('week-total').textContent = `${days.reduce((a, d) => a + d.count, 0)} total`;
 }
 
-// ---------- Focus timer ----------
-const MODES = {
-  focus: { min: 25, label: 'Focus time' },
-  short: { min: 5, label: 'Short break' },
-  long: { min: 15, label: 'Long break' },
-};
+// ---------- Focus timer (runs on the board, the page only shows it and sends commands) ----------
+const MODE_LABELS = { focus: 'Focus time', short: 'Short break', long: 'Long break' };
 const RING = 2 * Math.PI * 52;
-let mode = 'focus';
-let remaining = MODES.focus.min * 60;
-let endAt = null;
-let tickTimer = null;
-let phonePausedAt = null; // Set while the focus timer is paused because a phone was detected
+let timerState = { mode: 'focus', duration: 1500, remaining: 1500, running: false, phone_paused: false, sessions: [] };
+let timerReceivedAt = Date.now();
+let appStarted = null; // When the board app started; a change means it restarted with new code
 
 $('timer-ring').style.strokeDasharray = RING;
 
+function sessionsToday() {
+  const sod = startOfDay() / 1000;
+  return (timerState.sessions || []).filter(s => s.t >= sod);
+}
+
+function currentRemaining() {
+  const r = timerState.running ? timerState.remaining - (Date.now() - timerReceivedAt) / 1000 : timerState.remaining;
+  return Math.max(0, Math.ceil(r));
+}
+
 function renderTimer() {
-  const total = MODES[mode].min * 60;
+  const { mode, duration, running, phone_paused: phonePaused } = timerState;
+  const remaining = currentRemaining();
   const m = Math.floor(remaining / 60);
   const s = remaining % 60;
   $('timer-time').textContent = `${String(m).padStart(2, '0')}:${String(s).padStart(2, '0')}`;
-  $('timer-ring').style.strokeDashoffset = RING * (1 - remaining / total);
+  $('timer-ring').style.strokeDashoffset = RING * (1 - remaining / duration);
   const card = document.querySelector('.timer-card');
-  card.classList.toggle('phone-paused', phonePausedAt !== null);
-  $('timer-label').textContent = phonePausedAt !== null
-    ? '📱 Phone detected'
-    : endAt ? MODES[mode].label : remaining === total ? (mode === 'focus' ? 'Ready to focus' : 'Ready for a break') : 'Paused';
-  $('timer-start').textContent = endAt ? 'Pause' : remaining === total && phonePausedAt === null ? 'Start' : 'Resume';
+  card.classList.toggle('phone-paused', phonePaused);
   card.classList.toggle('break', mode !== 'focus');
-  $('sessions-today').textContent = load('sessions:' + todayKey(), 0);
-  $('focus-minutes').textContent = load('focusMinutes:' + todayKey(), 0) + ' min';
+  const fresh = remaining >= duration;
+  $('timer-label').textContent = phonePaused
+    ? '📱 Phone detected'
+    : running ? MODE_LABELS[mode] : fresh ? (mode === 'focus' ? 'Ready to focus' : 'Ready for a break') : 'Paused';
+  $('timer-start').textContent = running ? 'Pause' : fresh && !phonePaused ? 'Start' : 'Resume';
+  document.querySelectorAll('#timer-modes button').forEach(b => b.classList.toggle('active', b.dataset.mode === mode));
+  const today = sessionsToday();
+  $('sessions-today').textContent = today.length;
+  $('focus-minutes').textContent = today.reduce((a, x) => a + (x.minutes || 0), 0) + ' min';
 }
 
-function setMode(m) {
-  mode = m;
-  stopTimer();
-  remaining = MODES[m].min * 60;
-  document.querySelectorAll('#timer-modes button').forEach(b => b.classList.toggle('active', b.dataset.mode === m));
-  renderTimer();
-}
-
-function startTimer() {
-  endAt = Date.now() + remaining * 1000;
-  tickTimer = setInterval(tick, 250);
-}
-
-function stopTimer() {
-  phonePausedAt = null;
-  endAt = null;
-  clearInterval(tickTimer);
-  tickTimer = null;
-}
-
-function tick() {
-  remaining = Math.max(0, Math.round((endAt - Date.now()) / 1000));
-  if (remaining === 0) {
-    stopTimer();
-    if (mode === 'focus') {
-      save('sessions:' + todayKey(), load('sessions:' + todayKey(), 0) + 1);
-      save('focusMinutes:' + todayKey(), load('focusMinutes:' + todayKey(), 0) + MODES.focus.min);
-      showToast('🎉 Focus session complete — time for a break!', 'info');
-      setMode(load('sessions:' + todayKey(), 0) % 4 === 0 ? 'long' : 'short');
-      renderPhoneStats();
-    } else {
-      showToast('⏰ Break is over — back to work!', 'info');
-      setMode('focus');
-    }
+ui.on_message('timer', msg => {
+  if (appStarted !== null && msg.app_started !== appStarted) {
+    location.reload();
     return;
   }
-  renderTimer();
-}
-
-$('timer-start').addEventListener('click', () => {
-  if (endAt) {
-    stopTimer();
-  } else {
-    stopTimer();
-    startTimer();
+  appStarted = msg.app_started;
+  const prev = timerState;
+  timerState = msg;
+  timerReceivedAt = Date.now();
+  if (prev.phone_paused && !msg.phone_paused && msg.running) {
+    showToast('👍 Phone gone — focus timer resumed', 'info');
+  } else if (prev.mode === 'focus' && msg.mode !== 'focus' && (msg.sessions || []).length > (prev.sessions || []).length) {
+    showToast('🎉 Focus session complete — time for a break!', 'info');
+    renderPhoneStats();
+  } else if (prev.mode !== 'focus' && prev.running && msg.mode === 'focus' && !msg.running) {
+    showToast('⏰ Break is over — back to work!', 'info');
   }
   renderTimer();
 });
 
-// Pause a running focus session while a phone is in view
-function pauseTimerForPhone() {
-  if (mode !== 'focus') return;
-  if (!endAt) return;
-  stopTimer();
-  phonePausedAt = Date.now();
-  renderTimer();
-}
-
-// Resume once at least 10 seconds have passed and the phone is no longer in view
-function checkPhonePause() {
-  if (phonePausedAt === null) return;
-  const now = Date.now();
-  if (now - phonePausedAt >= PHONE_PAUSE_MIN_MS && now - lastPhoneSeen >= PHONE_IN_VIEW_TIMEOUT_MS) {
-    phonePausedAt = null;
-    startTimer();
-    showToast('👍 Phone gone — focus timer resumed', 'info');
-  }
-  renderTimer();
-}
-$('timer-reset').addEventListener('click', () => setMode(mode));
-document.querySelectorAll('#timer-modes button').forEach(b => b.addEventListener('click', () => setMode(b.dataset.mode)));
+const timerCmd = (action, extra = {}) => ui.send_message('timer_cmd', { action, ...extra });
+$('timer-start').addEventListener('click', () => timerCmd(timerState.running ? 'pause' : 'start'));
+$('timer-reset').addEventListener('click', () => timerCmd('reset'));
+document.querySelectorAll('#timer-modes button').forEach(b => b.addEventListener('click', () => timerCmd('mode', { mode: b.dataset.mode })));
+setInterval(renderTimer, 250);
 
 // ---------- Goals ----------
 function getTasks() {
@@ -418,7 +378,6 @@ function showToast(text, kind = '') {
 function everySecond() {
   renderClock();
   updatePhoneBadge();
-  checkPhonePause();
   if (todayKey() !== lastRenderedDay) {
     lastRenderedDay = todayKey();
     renderTimer();
