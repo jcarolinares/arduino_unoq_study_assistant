@@ -1,7 +1,7 @@
 <!--
-SPDX-FileCopyrightText: Copyright (C) Arduino s.r.l. and/or its affiliated companies
+SPDX-FileCopyrightText: Copyright (C) 2026 jcarolinares
 
-SPDX-License-Identifier: MPL-2.0
+SPDX-License-Identifier: GPL-3.0-or-later
 -->
 
 <!doctype html>
@@ -168,20 +168,6 @@ SPDX-License-Identifier: MPL-2.0
     </main>
 
     <div id="toast" class="toast" role="status"></div>
-
-    <script>
-      const iframe = document.getElementById('dynamicIframe');
-      const placeholder = document.getElementById('videoPlaceholder');
-      const streamUrl = `http://${window.location.hostname}:4912/embed`;
-      let intervalId;
-
-      iframe.onload = () => {
-        if (intervalId) clearInterval(intervalId);
-        placeholder.style.display = 'none';
-        iframe.style.display = 'block';
-      };
-      intervalId = setInterval(() => (iframe.src = streamUrl), 1000);
-    </script>
 
     <script src="libs/socket.io.min.js"></script>
     <script src="libs/arduino.js"></script>

@@ -1,6 +1,6 @@
-# SPDX-FileCopyrightText: Copyright (C) Arduino s.r.l. and/or its affiliated companies
+# SPDX-FileCopyrightText: Copyright (C) 2026 jcarolinares
 #
-# SPDX-License-Identifier: MPL-2.0
+# SPDX-License-Identifier: GPL-3.0-or-later
 
 from arduino.app_utils import App, Bridge, Logger
 from arduino.app_bricks.web_ui import WebUI
@@ -37,7 +37,13 @@ SOUND_PHONE, SOUND_DONE, SOUND_BREAK_OVER, SOUND_START = range(4)
 ui = WebUI()
 detection_stream = VideoObjectDetection(confidence=0.5, debounce_sec=0.0)
 
-ui.on_message("override_th", lambda sid, threshold: detection_stream.override_threshold(threshold))
+
+
+def on_sensitivity(sid, value):
+  detection_stream.override_threshold(float(value))
+
+
+ui.on_message("override_th", on_sensitivity)
 
 APP_STARTED = time.time()   # Lets open dashboards notice the app restarted and reload the new version
 lock = threading.Lock()
@@ -266,18 +272,15 @@ def on_phone_detected():
 detection_stream.on_detect(PHONE_LABEL, on_phone_detected)
 
 
-# Forward every detection to the UI so the live "phone in view" badge stays updated
-def send_detections_to_ui(detections: dict):
-  for key, values in detections.items():
-    for value in values:
-      ui.send_message("detection", message={
-        "content": key,
-        "confidence": value.get("confidence"),
-        "timestamp": time.time(),
-      })
+# Forward every detected object to the dashboard so the live "phone in view" badge stays updated
+def forward_detections(detections: dict):
+  now = time.time()
+  for label, hits in detections.items():
+    for hit in hits:
+      ui.send_message("detection", message={"content": label, "confidence": hit.get("confidence"), "timestamp": now})
 
 
-detection_stream.on_detect_all(send_detections_to_ui)
+detection_stream.on_detect_all(forward_detections)
 
 
 # ---------- Main loop: advances the timer and drives the LED matrix ----------

@@ -1,6 +1,6 @@
-// SPDX-FileCopyrightText: Copyright (C) Arduino s.r.l. and/or its affiliated companies
+// SPDX-FileCopyrightText: Copyright (C) 2026 jcarolinares
 //
-// SPDX-License-Identifier: MPL-2.0
+// SPDX-License-Identifier: GPL-3.0-or-later
 
 const $ = id => document.getElementById(id);
 const LOCALE = 'en-GB';
@@ -373,6 +373,23 @@ function showToast(text, kind = '') {
   clearTimeout(toastTimer);
   toastTimer = setTimeout(() => (t.className = 'toast ' + kind), 3500);
 }
+
+// ---------- Desk camera ----------
+// The detection Brick serves the annotated stream on port 4912. Wait until it answers, then show it.
+const CAMERA_URL = `http://${location.hostname}:4912/embed`;
+function connectCamera() {
+  fetch(CAMERA_URL, { mode: 'no-cors', cache: 'no-store' })
+    .then(() => {
+      const frame = $('dynamicIframe');
+      frame.addEventListener('load', () => {
+        $('videoPlaceholder').style.display = 'none';
+        frame.style.display = 'block';
+      }, { once: true });
+      frame.src = CAMERA_URL;
+    })
+    .catch(() => setTimeout(connectCamera, 2000));
+}
+connectCamera();
 
 // ---------- Main loop ----------
 function everySecond() {
