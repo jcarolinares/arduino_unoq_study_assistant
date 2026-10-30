@@ -1,0 +1,4 @@
+# Runtime data (personal detection history)
+data/
+# App Lab build cache
+.cache/

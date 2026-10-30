@@ -1,164 +1,145 @@
-# Arduino UNO Q Study Assistant
+# Study Assistant - Phone Detector
 
-A Study Assistant that uses the Arduino UNO Q and a Local Machine Learning Computer Vision Yolo to help you to focus and work!
+The **Study Assistant** turns your Arduino UNO Q into a desk companion that helps you stay focused. A USB camera watches your desk and an AI model looks for cell phones in real time. Every time a phone shows up, a **Modulino® Buzzer** beeps, the detection is counted, and your focus timer pauses until the phone is gone.
 
-## Brick Used
+A web dashboard shows the live camera, the time and date, a focus (Pomodoro) timer, today's goals, study tips and statistics on how often your phone distracted you during the day.
 
-The example uses the following Bricks:
+![Study Assistant dashboard](assets/docs_assets/dashboard.png)
 
-- `web_ui`: Brick to create a web interface to display the classification results and model controls.
-- `video_objectdetection`: Brick to classify objects within a live video feed from a camera.
-  
+*This App is based on the **Detect Objects on Camera** example for the Arduino UNO Q.*
+
+## Features
+
+- 🎥 **Desk camera**: live camera feed with bounding boxes around every detected object, plus a sensitivity slider.
+- 🕒 **Clock**: current time, day of the week and date, day progress, ISO week number, day of the year and time left until midnight.
+- 📱 **Phone detections**:
+  - number of detections today, compared with yesterday
+  - live **Phone in view!** badge and a pop-up alert on each new detection
+  - **Phone-free for**: time since the last detection
+  - **Best streak today**: the longest phone-free stretch of the day
+  - time of the last detection and a **focus score** out of 100
+- ⏱️ **Focus timer**: 25-minute focus sessions with 5 and 15-minute breaks (a 15-minute break after every 4th session). It counts sessions and focused minutes for the day.
+- 🔕 **Auto-pause**: if a phone is detected during a focus session, the timer pauses. It resumes on its own once at least 10 seconds have passed and the phone is out of view.
+- 📊 **Charts**: detections by hour for today and detections over the last 7 days.
+- ✅ **Today's goals**: a simple checklist for what you want to get done.
+- 💡 **Study tips**: a new tip every minute, or on demand with **Next**.
+- 🔔 **Modulino Buzzer**: a double beep every time a phone is detected. While the phone stays in view it keeps beeping, at most every 2 seconds.
+
+## Bricks Used
+
+- `video_object_detection`: runs a pre-trained object detection model on the live camera stream and draws the bounding boxes.
+- `web_ui`: hosts the dashboard and the real-time messaging between the board and the browser.
+
 ## Hardware and Software Requirements
 
 ### Hardware
 
-- [Arduino® UNO Q](https://store.arduino.cc/products/uno-q)
+- Arduino® UNO Q (x1)
 - USB camera (x1)
 - USB-C® hub adapter with external power (x1)
 - A power supply (5 V, 3 A) for the USB hub (e.g. a phone charger)
-- Personal computer with internet access
-- Modulino Buzzer
-- Modulino Knob
-- Modulino Pixels
+- Modulino® Buzzer (x1)
+- Qwiic cable (x1)
 
 ### Software
 
 - Arduino App Lab
 
-## How to Use this project
+**Note:** The App must run in **Network Mode** in Arduino App Lab, because the camera is connected through the USB-C® hub.
 
-1. Connect the USB-C hub to the UNO Q and the USB camera.
-  ![Hardware setup](assets/docs_assets/hardware-setup.png) and attach your camera to your monitor or your lamp pointing towards your desktop.
-2. Attach the external power supply to the USB-C hub to power everything.
-3. Run the App.
-   ![Arduino App Lab - Run App](assets/docs_assets/launch-app.png)
-4. The App should open automatically in the web browser. You can open it manually via `<board-name>.local:7000`.
-5. Start to work!
+## How to Use the App
 
+1. Connect the USB camera to the board through the powered USB-C® hub.
 
-![Example of special reaction](assets/docs_assets/special-detection.png)
+   ![Hardware setup](assets/docs_assets/hardware-setup.png)
+
+2. Connect the **Modulino Buzzer** to the Qwiic connector of the UNO Q.
+
+3. Place the camera so it can see your desk.
+
+4. Run the App from Arduino App Lab, or from the board's terminal:
+
+   ```bash
+   arduino-app-cli app start user:phone-detector-buzzer
+   ```
+
+5. Open the dashboard in your browser at `http://<board-ip>:7000` or `http://<board-name>.local:7000`.
+
+6. Press **Start** on the focus timer and get to work. If a phone appears on camera, the buzzer beeps and the timer pauses until you put the phone away:
+
+   ![Focus timer paused by a phone detection](assets/docs_assets/phone-pause.png)
 
 ## How it Works
 
-This example hosts a Web UI where we can see the video input from the camera connected via USB. The video stream is then processed using the `video_objectdetection` Brick. When an object is detected, it is logged along with the confidence score (e.g. 95% potted plant).
+```
+ USB camera ──► video_object_detection ──► python/main.py ──► Bridge ──► sketch.ino ──► Modulino Buzzer
+                       │                        │
+                       │ live stream (:4912)    │ web_ui messages (:7000)
+                       ▼                        ▼
+                 ┌────────────── Web dashboard (browser) ──────────────┐
+                 │ camera · clock · stats · charts · timer · goals     │
+                 └─────────────────────────────────────────────────────┘
+```
 
-Here is a brief explanation of the full-stack application:
+### 🔧 Backend (`python/main.py`)
 
-### 🔧 Backend (main.py)
+- Creates the `WebUI` and `VideoObjectDetection` Bricks (confidence 0.5).
+- Registers `on_detect("cell phone", ...)`, which runs on every frame where a phone is seen:
+  - If no phone was seen for more than **3 seconds**, it counts a **new detection**. The timestamp is saved and `phone_event` and `stats` messages are sent to the dashboard.
+  - It calls `Bridge.call("beep")` at most once every **2 seconds**.
+- Registers `on_detect_all(...)` to forward every detection to the dashboard as a `detection` message. The dashboard uses it for the **Phone in view** badge and the timer auto-pause.
+- Saves the detection timestamps in `data/phone_events.json`, keeping the last 8 days, so the counters survive restarts.
+- Listens for these messages from the dashboard:
+  - `get_stats`: sends back the stored detection history
+  - `override_th`: changes the detection confidence threshold (the sensitivity slider)
 
-- Initializes the app Bricks:
-  - **WebUI** (`ui = WebUI()`): channel to push messages to the frontend.
-  - **VideoObjectDetection** (`detection_stream = VideoObjectDetection()`): runs object detection on the video stream.
+You can tune the behaviour with the constants at the top of the file:
 
-- Wires detection events to actions using callbacks:
-  - `on_detect_all(send_detections_to_ui)`: sends `{ content, confidence, timestamp }` via `ui.send_message("detection", ...)`
+| Constant | Default | Meaning |
+| --- | --- | --- |
+| `NEW_EVENT_GAP_SEC` | `3.0` | Seconds without a phone before a new sighting counts as a new detection |
+| `BEEP_COOLDOWN_SEC` | `2.0` | Minimum time between two beeps while a phone stays in view |
+| `HISTORY_DAYS` | `8` | Days of detection history kept on the board |
 
-- **Controls**:
-  - Listens for `override_th` → updates detection threshold
+### 🔌 Microcontroller (`sketch/sketch.ino`)
 
-- Exposes:
-  - **Realtime messaging**: publishes detection updates to the frontend via `ui.send_message("detection", message=entry)` so the UI can display live detections.
+- Starts the Bridge and the Modulino bus (`Modulino.begin(Wire1)`), and waits until the **Modulino Buzzer** is found.
+- Provides a `beep` function to Python with `Bridge.provide("beep", beep)`. It plays a double tone: 2000 Hz, then 2600 Hz, 150 ms each.
 
-- Runs with `App.run()` which starts the internal event loop and keeps the detection stream and UI messaging alive.
+### 💻 Frontend (`assets/index.html`, `assets/app.js`, `assets/style.css`)
 
----
+- Embeds the live annotated camera stream from the detection Brick (`http://<board>:4912/embed`).
+- Updates the clock every second.
+- Works out the daily and hourly stats, streaks and the 7-day chart from the detection timestamps, using the browser's local time zone. The board itself runs in UTC.
+- Runs the focus timer in the browser. It pauses on `detection` messages for `cell phone` during a focus session and resumes after at least 10 seconds (`PHONE_PAUSE_MIN_MS`), once no phone has been seen for 3 seconds (`PHONE_IN_VIEW_TIMEOUT_MS`).
+- Keeps timer sessions, focused minutes, goals and the sensitivity setting in the browser's `localStorage`, so they are saved per browser.
+- Switches to a dark theme automatically when your system uses dark mode.
 
-### 💻 Frontend (index.html + app.js)
+## Project Structure
 
-- **Video feed**
-  - iframe auto-retries /embed until the camera stream is available
+```
+phone-detector-buzzer/
+├── app.yaml               # App name, icon, description and Bricks
+├── README.md
+├── python/
+│   └── main.py            # Detection logic, statistics and Bridge calls
+├── sketch/
+│   ├── sketch.ino         # Modulino Buzzer control
+│   └── sketch.yaml        # Board profile and Arduino_Modulino library
+├── assets/
+│   ├── index.html         # Dashboard layout
+│   ├── app.js             # Clock, stats, charts, timer, goals and tips
+│   ├── style.css          # Dashboard styles (light and dark theme)
+│   ├── libs/              # socket.io and the WebUI helper
+│   └── docs_assets/       # Images used in this README
+└── data/
+    └── phone_events.json  # Detection history, created at runtime
+```
 
-- **Controls**
-  - Slider, numeric input, and reset button adjust threshold live
-  - Updates sent to backend with: `socket.emit("override_th", value)`
+## Troubleshooting
 
-- **Feedback**
-  - Shows GIF + text for known objects (dog, cat, cup, cell phone, clock, potted plant)
-
-- **Recent detections**
-  - Displays the last 5 detections with percentage and timestamp
-
-- **Connection status**
-  - Shows an error message if the WebSocket connection drops
-
----
-
-## Understanding the Code
-
-Once the application is running, you can open it in your browser by navigating to `<BOARD-IP-ADDRESS>:7000`.  
-At that point, the device begins performing the following:
-
-- Serving the **object detection UI** and exposing realtime transports.
-
-    The UI is hosted by the `WebUI` Brick and communicates with the backend via WebSocket (Socket.IO).  
-    The backend pushes detection messages whenever new objects are found.
-
-    ```python
-    from arduino.app_bricks.web_ui import WebUI
-    from arduino.app_bricks.video_objectdetection import VideoObjectDetection
-    from datetime import datetime, UTC
-
-    ui = WebUI()
-    detection_stream = VideoObjectDetection()
-
-    ui.on_message("override_th",
-                  lambda sid, threshold: detection_stream.override_threshold(threshold))
-
-    detection_stream.on_detect_all(send_detections_to_ui)
-    ```
-
-    - `detection` (WebSocket message): JSON entry with label, confidence, and timestamp sent to the UI.  
-    - `override_th` (WebSocket → backend): adjusts the confidence threshold live.
-
-- Processing detections and broadcasting updates.
-
-    When the model detects objects, the backend:
-
-    1. Iterates over all detected objects with their confidence scores.  
-    2. Attaches an ISO 8601 UTC timestamp.  
-    3. Publishes each detection as a JSON entry to the frontend channel `detection`.
-
-    ```python
-    def send_detections_to_ui(detections: dict):
-        for key, value in detections.items():
-            entry = {
-                "content": key,
-                "confidence": value,
-                "timestamp": datetime.now(UTC).isoformat()
-            }
-            ui.send_message("detection", message=entry)
-    ```
-
-- Rendering and interacting on the frontend.
-
-    The **index.html + app.js** bundle defines the interface:
-
-    - A **video feed iframe** auto-retries `/embed` until the camera stream is live.  
-    - A **confidence control** (slider + input + reset) lets the user adjust the detection threshold.  
-    - A **feedback section** shows animations and messages for known classes (cat, dog, cup, clock, potted plant, etc.).  
-    - A **recent detections list** displays the latest 5 detections with percentage and timestamp.  
-
-    ```javascript
-    const socket = io(`http://${window.location.host}`);
-
-    socket.on('detection', (message) => {
-        printDetection(message);   // update history
-        renderDetections();        // redraw the list
-        updateFeedback(message);   // update feedback panel
-    });
-    ```
-
-    - `detection` (WebSocket): received whenever the backend publishes results.  
-    - The slider and input dynamically update the backend threshold (`override_th`).  
-    - If the connection drops, an error banner is shown (`error-container`).  
-
-- Executing the event loop.
-
-    Finally, the backend keeps everything alive with:
-
-    ```python
-    App.run()
-    ```
-
-    This maintains the object detection stream, callback hooks, threshold overrides, and WebSocket communication with the frontend.
+- **"Searching webcam…" stays on screen**: check that the camera is connected through a powered USB-C® hub and that the App runs in Network Mode.
+- **No beep**: the sketch waits in `setup()` until it finds the buzzer. Check the Qwiic cable and that the Modulino's power LED is on, then restart the App.
+- **Too many or too few detections**: move the **Sensitivity** slider. Higher values need a more confident detection.
+- **Wrong day or hour in the charts**: the statistics follow the time zone of the computer showing the dashboard. Check that its clock is set correctly.
+- **Reset the statistics**: stop the App and delete `data/phone_events.json`.
